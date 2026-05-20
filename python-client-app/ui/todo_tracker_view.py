@@ -1,10 +1,14 @@
 import datetime
+import threading
+import requests
 import customtkinter as ctk
 
 
 class TodoTrackerView(ctk.CTkFrame):
     def __init__(self, master):
         super().__init__(master, fg_color="transparent")
+
+        self.api_base_url = "http://localhost:8081/api"
 
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -37,6 +41,7 @@ class TodoTrackerView(ctk.CTkFrame):
         self.grid_frame.grid_columnconfigure(0, weight=1)
 
         self.build_grid_headers()
+        self.fetch_tasks_from_server()
 
     def build_grid_headers(self):
         header_task = ctk.CTkLabel(self.grid_frame, text="Task Name", font=ctk.CTkFont(weight="bold"))
@@ -57,18 +62,59 @@ class TodoTrackerView(ctk.CTkFrame):
         header_action = ctk.CTkLabel(self.grid_frame, text="Action", font=ctk.CTkFont(weight="bold"))
         header_action.grid(row=0, column=len(self.dates) + 1, padx=10, pady=10)
 
+    def fetch_tasks_from_server(self):
+        threading.Thread(target=self._async_fetch_tasks, daemon=True).start()
+
+    def _async_fetch_tasks(self):
+        try:
+            response = requests.get(f"{self.api_base_url}/tasks", timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                self.after(0, self._render_fetched_tasks, data)
+        except requests.RequestException:
+            pass
+
+    def _render_fetched_tasks(self, tasks_data):
+        for task in tasks_data:
+            task_id = task.get("id")
+            name = task.get("name")
+            completed_dates = task.get("completedDates", [])
+            self._render_task_row(task_id, name, completed_dates)
+
     def add_task(self):
         task_name = self.task_entry.get().strip()
         if not task_name:
             return
 
-        if task_name in self.tasks:
-            print(f"API MOCK -> Error: Task '{task_name}' already exists.")
+        self.btn_add_task.configure(state="disabled", text="Adding...")
+        threading.Thread(target=self._async_add_task, args=(task_name,), daemon=True).start()
+
+    def _async_add_task(self, task_name):
+        try:
+            response = requests.post(f"{self.api_base_url}/tasks", json={"name": task_name, "completedDates": []},
+                                     timeout=5)
+            if response.status_code == 200:
+                created_task = response.json()
+                task_id = created_task.get("id")
+                self.after(0, self._finalize_add_task, task_id, task_name)
+            else:
+                self.after(0, self._reset_add_button)
+        except requests.RequestException:
+            self.after(0, self._reset_add_button)
+
+    def _finalize_add_task(self, task_id, task_name):
+        self._render_task_row(task_id, task_name, [])
+        self.task_entry.delete(0, 'end')
+        self._reset_add_button()
+
+    def _reset_add_button(self):
+        self.btn_add_task.configure(state="normal", text="Add Task")
+
+    def _render_task_row(self, task_id, task_name, completed_dates):
+        if task_id in self.tasks:
             return
 
-        print(f"API MOCK -> POST /api/tasks | Adding task: {task_name}")
-
-        self.tasks[task_name] = {}
+        self.tasks[task_id] = {"name": task_name}
         row_idx = self.current_row
         self.current_row += 1
 
@@ -77,7 +123,8 @@ class TodoTrackerView(ctk.CTkFrame):
 
         checkboxes = []
         for col_idx, date_obj in enumerate(self.dates, start=1):
-            var = ctk.StringVar(value="off")
+            date_str = date_obj.strftime("%Y-%m-%d")
+            var = ctk.StringVar(value="on" if date_str in completed_dates else "off")
 
             cb_state = "normal" if date_obj == self.today else "disabled"
 
@@ -89,7 +136,7 @@ class TodoTrackerView(ctk.CTkFrame):
                 offvalue="off",
                 state=cb_state,
                 width=24,
-                command=lambda t=task_name, d=date_obj, v=var: self.toggle_task(t, d, v)
+                command=lambda t_id=task_id, d=date_obj, v=var: self.toggle_task(t_id, d, v)
             )
             cb.grid(row=row_idx, column=col_idx, padx=15, pady=10)
             checkboxes.append(cb)
@@ -100,20 +147,23 @@ class TodoTrackerView(ctk.CTkFrame):
             fg_color="#ff4d4d",
             hover_color="#cc0000",
             width=60,
-            command=lambda t=task_name, r=row_idx, l=task_label, cbs=checkboxes: self.delete_task(t, r, l, cbs)
+            command=lambda t_id=task_id, r=row_idx, l=task_label, cbs=checkboxes: self.delete_task(t_id, r, l, cbs)
         )
         btn_delete.grid(row=row_idx, column=len(self.dates) + 1, padx=10, pady=10)
 
-        self.task_entry.delete(0, 'end')
-
-    def toggle_task(self, task_name, date_obj, var):
-        status = var.get()
+    def toggle_task(self, task_id, date_obj, var):
+        status = var.get() == "on"
         date_str = date_obj.strftime("%Y-%m-%d")
-        print(f"API MOCK -> PUT /api/tasks/{task_name}/history | Date: {date_str} | Completed: {status == 'on'}")
+        threading.Thread(target=self._async_toggle_task, args=(task_id, date_str, status), daemon=True).start()
 
-    def delete_task(self, task_name, row_idx, label_widget, checkboxes):
-        print(f"API MOCK -> DELETE /api/tasks/{task_name}")
+    def _async_toggle_task(self, task_id, date_str, status):
+        try:
+            payload = {"date": date_str, "completed": status}
+            requests.put(f"{self.api_base_url}/tasks/{task_id}/history", json=payload, timeout=5)
+        except requests.RequestException:
+            pass
 
+    def delete_task(self, task_id, row_idx, label_widget, checkboxes):
         label_widget.destroy()
         for cb in checkboxes:
             cb.destroy()
@@ -122,4 +172,11 @@ class TodoTrackerView(ctk.CTkFrame):
         for slave in grid_slaves:
             slave.destroy()
 
-        del self.tasks[task_name]
+        del self.tasks[task_id]
+        threading.Thread(target=self._async_delete_task, args=(task_id,), daemon=True).start()
+
+    def _async_delete_task(self, task_id):
+        try:
+            requests.delete(f"{self.api_base_url}/tasks/{task_id}", timeout=5)
+        except requests.RequestException:
+            pass
