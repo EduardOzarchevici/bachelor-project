@@ -4,64 +4,171 @@ from ui.lock_screen import LockScreen
 from ui.dashboard_view import DashboardView
 from ui.pomodoro_view import PomodoroView
 from ui.todo_tracker_view import TodoTrackerView
+from ui.auth_view import AuthView
+from ui.theme import APP_TITLE, WINDOW_SIZE, MIN_WINDOW_SIZE, COLORS, FONTS, SPACING
 
 
 class MainWindow(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Productivity & Fitness Tracker")
-        self.geometry("1000x650")
+        self.title(APP_TITLE)
+        self.geometry(WINDOW_SIZE)
+        self.minsize(*MIN_WINDOW_SIZE)
+        self.configure(fg_color=COLORS["bg"])
 
         self.grid_rowconfigure(0, weight=1)
+        self.grid_columnconfigure(0, weight=1)
+
+        self.auth_view = AuthView(self, on_auth_success=self.initialize_app_ui)
+        self.auth_view.grid(row=0, column=0, sticky="nsew")
+
+        self.sidebar_frame = None
+        self.main_content_frame = None
+        self.dashboard_view = None
+        self.pomodoro_view = None
+        self.todo_tracker_view = None
+        self.lock_screen_window = None
+        self.nav_buttons = {}
+        self.active_nav = None
+
+    def initialize_app_ui(self):
+        self.auth_view.destroy()
         self.grid_columnconfigure(1, weight=1)
 
-        self.sidebar_frame = ctk.CTkFrame(self, width=200, corner_radius=0)
+        self.sidebar_frame = ctk.CTkFrame(
+            self,
+            width=SPACING["sidebar_width"],
+            corner_radius=0,
+            fg_color=COLORS["sidebar"],
+            border_width=0,
+        )
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(4, weight=1)
+        self.sidebar_frame.grid_rowconfigure(6, weight=1)
+        self.sidebar_frame.grid_propagate(False)
 
-        self.logo_label = ctk.CTkLabel(self.sidebar_frame, text="FitBlocker", font=ctk.CTkFont(size=20, weight="bold"))
-        self.logo_label.grid(row=0, column=0, padx=20, pady=(20, 10))
+        brand_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
+        brand_frame.grid(row=0, column=0, padx=20, pady=(28, 32), sticky="ew")
 
-        self.btn_dashboard = ctk.CTkButton(self.sidebar_frame, text="Dashboard", command=self.show_dashboard)
-        self.btn_dashboard.grid(row=1, column=0, padx=20, pady=10)
+        ctk.CTkLabel(
+            brand_frame,
+            text="FitBlocker",
+            font=ctk.CTkFont(family=FONTS["logo"][0], size=FONTS["logo"][1], weight="bold"),
+            text_color=COLORS["accent"],
+        ).pack(anchor="w")
 
-        self.btn_todo = ctk.CTkButton(self.sidebar_frame, text="Habits/Tasks", command=self.show_todo_tracker)
-        self.btn_todo.grid(row=2, column=0, padx=20, pady=10)
+        ctk.CTkLabel(
+            brand_frame,
+            text="Focus · Habits · Fitness",
+            font=ctk.CTkFont(family=FONTS["small"][0], size=FONTS["small"][1]),
+            text_color=COLORS["text_muted"],
+        ).pack(anchor="w", pady=(4, 0))
 
-        self.btn_pomodoro = ctk.CTkButton(self.sidebar_frame, text="Pomodoro", command=self.show_pomodoro)
-        self.btn_pomodoro.grid(row=3, column=0, padx=20, pady=10)
+        ctk.CTkLabel(
+            self.sidebar_frame,
+            text="NAVIGATION",
+            font=ctk.CTkFont(family=FONTS["small"][0], size=10, weight="bold"),
+            text_color=COLORS["text_dim"],
+        ).grid(row=1, column=0, padx=24, pady=(0, 8), sticky="w")
 
-        self.btn_trigger = ctk.CTkButton(self.sidebar_frame, text="Test Penalty", fg_color="red", hover_color="darkred",
-                                         command=self.trigger_penalty)
-        self.btn_trigger.grid(row=5, column=0, padx=20, pady=(10, 20))
+        self.nav_buttons["dashboard"] = self._create_nav_button("Dashboard", self.show_dashboard)
+        self.nav_buttons["dashboard"].grid(row=2, column=0, padx=16, pady=4, sticky="ew")
 
-        self.main_content_frame = ctk.CTkFrame(self, corner_radius=0, fg_color="transparent")
+        self.nav_buttons["todo"] = self._create_nav_button("Habits & Tasks", self.show_todo_tracker)
+        self.nav_buttons["todo"].grid(row=3, column=0, padx=16, pady=4, sticky="ew")
+
+        self.nav_buttons["pomodoro"] = self._create_nav_button("Pomodoro", self.show_pomodoro)
+        self.nav_buttons["pomodoro"].grid(row=4, column=0, padx=16, pady=4, sticky="ew")
+
+        footer = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
+        footer.grid(row=7, column=0, padx=16, pady=(0, 24), sticky="ew")
+
+        ctk.CTkButton(
+            footer,
+            text="Test Penalty Lock",
+            height=36,
+            font=ctk.CTkFont(family=FONTS["small"][0], size=FONTS["small"][1]),
+            fg_color=COLORS["danger"],
+            hover_color=COLORS["danger_hover"],
+            command=self.trigger_penalty,
+        ).pack(fill="x", pady=(0, 8))
+
+        ctk.CTkLabel(
+            footer,
+            text="Kill switch: Alt + 0 + L",
+            font=ctk.CTkFont(family=FONTS["small"][0], size=10),
+            text_color=COLORS["text_dim"],
+        ).pack()
+
+        self.main_content_frame = ctk.CTkFrame(self, corner_radius=0, fg_color=COLORS["bg"])
         self.main_content_frame.grid(row=0, column=1, sticky="nsew")
         self.main_content_frame.grid_rowconfigure(0, weight=1)
         self.main_content_frame.grid_columnconfigure(0, weight=1)
 
-        self.dashboard_view = DashboardView(self.main_content_frame)
+        self.dashboard_view = DashboardView(
+            self.main_content_frame,
+            on_open_pomodoro=self.show_pomodoro,
+            on_open_habits=self.show_todo_tracker,
+        )
         self.pomodoro_view = PomodoroView(self.main_content_frame, penalty_callback=self.trigger_penalty)
         self.todo_tracker_view = TodoTrackerView(self.main_content_frame)
 
-        keyboard.add_hotkey('alt+0+l', self.handle_kill_switch_event)
-        self.lock_screen_window = None
+        keyboard.add_hotkey("alt+0+l", self.handle_kill_switch_event)
+        self._set_active_nav("dashboard")
+        self.show_dashboard()
 
-        self.show_todo_tracker()
+    def _create_nav_button(self, text, command):
+        return ctk.CTkButton(
+            self.sidebar_frame,
+            text=text,
+            height=42,
+            anchor="w",
+            font=ctk.CTkFont(family=FONTS["body"][0], size=FONTS["body"][1]),
+            fg_color="transparent",
+            text_color=COLORS["text_muted"],
+            hover_color=COLORS["sidebar_hover"],
+            command=command,
+        )
+
+    def _set_active_nav(self, key):
+        self.active_nav = key
+        for nav_key, button in self.nav_buttons.items():
+            if nav_key == key:
+                button.configure(
+                    fg_color=COLORS["accent_soft"],
+                    text_color=COLORS["accent"],
+                    hover_color=COLORS["accent_soft"],
+                )
+            else:
+                button.configure(
+                    fg_color="transparent",
+                    text_color=COLORS["text_muted"],
+                    hover_color=COLORS["sidebar_hover"],
+                )
+
+    def _hide_all_views(self):
+        for view in (self.dashboard_view, self.pomodoro_view, self.todo_tracker_view):
+            if view is not None:
+                view.grid_forget()
 
     def show_dashboard(self):
-        self.pomodoro_view.grid_forget()
-        self.todo_tracker_view.grid_forget()
+        if self.dashboard_view is None:
+            return
+        self._set_active_nav("dashboard")
+        self._hide_all_views()
         self.dashboard_view.grid(row=0, column=0, sticky="nsew")
 
     def show_pomodoro(self):
-        self.dashboard_view.grid_forget()
-        self.todo_tracker_view.grid_forget()
+        if self.pomodoro_view is None:
+            return
+        self._set_active_nav("pomodoro")
+        self._hide_all_views()
         self.pomodoro_view.grid(row=0, column=0, sticky="nsew")
 
     def show_todo_tracker(self):
-        self.dashboard_view.grid_forget()
-        self.pomodoro_view.grid_forget()
+        if self.todo_tracker_view is None:
+            return
+        self._set_active_nav("todo")
+        self._hide_all_views()
         self.todo_tracker_view.grid(row=0, column=0, sticky="nsew")
 
     def trigger_penalty(self):
@@ -69,7 +176,7 @@ class MainWindow(ctk.CTk):
             self.lock_screen_window = LockScreen(
                 self,
                 target_pushups=5,
-                on_unlock_callback=self.on_penalty_cleared
+                on_unlock_callback=self.on_penalty_cleared,
             )
 
     def on_penalty_cleared(self):

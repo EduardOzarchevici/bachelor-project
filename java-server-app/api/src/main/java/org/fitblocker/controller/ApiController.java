@@ -1,11 +1,14 @@
-package com.fitblocker.controller;
+package org.fitblocker.controller;
 
-import com.fitblocker.dto.HistoryUpdateRequest;
-import com.fitblocker.model.HabitTask;
-import com.fitblocker.model.UserStats;
-import com.fitblocker.repository.HabitTaskRepository;
-import com.fitblocker.repository.UserStatsRepository;
+import org.fitblocker.dto.HistoryUpdateRequest;
+import org.fitblocker.model.HabitTask;
+import org.fitblocker.model.UserStats;
+import org.fitblocker.model.AppUser;
+import org.fitblocker.repository.HabitTaskRepository;
+import org.fitblocker.repository.UserStatsRepository;
+import org.fitblocker.repository.AppUserRepository;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -17,47 +20,60 @@ public class ApiController {
 
     private final HabitTaskRepository taskRepository;
     private final UserStatsRepository statsRepository;
+    private final AppUserRepository userRepository;
 
-    public ApiController(HabitTaskRepository taskRepository, UserStatsRepository statsRepository) {
+    public ApiController(HabitTaskRepository taskRepository, UserStatsRepository statsRepository, AppUserRepository userRepository) {
         this.taskRepository = taskRepository;
         this.statsRepository = statsRepository;
-        initStats();
+        this.userRepository = userRepository;
     }
 
-    private void initStats() {
-        if (statsRepository.findById(1L).isEmpty()) {
-            statsRepository.save(new UserStats());
-        }
+    private AppUser getAuthenticatedUser(Authentication authentication) {
+        return userRepository.findByUsername(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"));
     }
 
     @GetMapping("/stats")
-    public UserStats getStats() {
-        return statsRepository.findById(1L).orElse(new UserStats());
+    public UserStats getStats(Authentication authentication) {
+        AppUser user = getAuthenticatedUser(authentication);
+        return statsRepository.findByUser(user).orElseGet(() -> {
+            UserStats newStats = new UserStats();
+            newStats.setUser(user);
+            return statsRepository.save(newStats);
+        });
     }
 
     @GetMapping("/tasks")
-    public List<HabitTask> getAllTasks() {
-        return taskRepository.findAll();
+    public List<HabitTask> getAllTasks(Authentication authentication) {
+        AppUser user = getAuthenticatedUser(authentication);
+        return taskRepository.findAllByUser(user);
     }
 
     @PostMapping("/tasks")
-    public ResponseEntity<HabitTask> createTask(@RequestBody HabitTask task) {
-        if (taskRepository.existsByName(task.getName())) {
+    public ResponseEntity<HabitTask> createTask(@RequestBody HabitTask task, Authentication authentication) {
+        AppUser user = getAuthenticatedUser(authentication);
+        if (taskRepository.existsByNameAndUser(task.getName(), user)) {
             return ResponseEntity.badRequest().build();
         }
+        task.setUser(user);
         return ResponseEntity.ok(taskRepository.save(task));
     }
 
     @PutMapping("/tasks/{id}/history")
-    public ResponseEntity<Void> updateHistory(@PathVariable Long id, @RequestBody HistoryUpdateRequest request) {
-        Optional<HabitTask> optionalTask = taskRepository.findById(id);
+    public ResponseEntity<Void> updateHistory(@PathVariable Long id, @RequestBody HistoryUpdateRequest request, Authentication authentication) {
+        AppUser user = getAuthenticatedUser(authentication);
+        Optional<HabitTask> optionalTask = taskRepository.findByIdAndUser(id, user);
 
         if (optionalTask.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
 
         HabitTask task = optionalTask.get();
-        UserStats stats = statsRepository.findById(1L).get();
+        UserStats stats = statsRepository.findByUser(user).orElseGet(() -> {
+            UserStats newStats = new UserStats();
+            newStats.setUser(user);
+            return statsRepository.save(newStats);
+        });
 
         if (request.isCompleted() && !task.getCompletedDates().contains(request.getDate())) {
             task.getCompletedDates().add(request.getDate());
@@ -76,9 +92,12 @@ public class ApiController {
     }
 
     @DeleteMapping("/tasks/{id}")
-    public ResponseEntity<Void> deleteTask(@PathVariable Long id) {
-        if (taskRepository.existsById(id)) {
-            taskRepository.deleteById(id);
+    public ResponseEntity<Void> deleteTask(@PathVariable Long id, Authentication authentication) {
+        AppUser user = getAuthenticatedUser(authentication);
+        Optional<HabitTask> optionalTask = taskRepository.findByIdAndUser(id, user);
+
+        if (optionalTask.isPresent()) {
+            taskRepository.delete(optionalTask.get());
             return ResponseEntity.ok().build();
         }
         return ResponseEntity.notFound().build();

@@ -1,4 +1,4 @@
-package com.fitblocker.dto;
+package org.fitblocker.dto;
 
 public class HistoryUpdateRequest {
     private String date;

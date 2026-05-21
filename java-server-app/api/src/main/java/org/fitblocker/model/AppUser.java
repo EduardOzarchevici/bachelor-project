@@ -1,4 +1,4 @@
-package com.fitblocker.model;
+package org.fitblocker.model;
 
 import jakarta.persistence.*;
 

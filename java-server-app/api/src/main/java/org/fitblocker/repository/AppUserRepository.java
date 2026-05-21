@@ -1,6 +1,5 @@
 package org.fitblocker.repository;
 
-import org.fitblocker.model.UserStats;
 import org.fitblocker.model.AppUser;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
@@ -8,6 +7,7 @@ import org.springframework.stereotype.Repository;
 import java.util.Optional;
 
 @Repository
-public interface UserStatsRepository extends JpaRepository<UserStats, Long> {
-    Optional<UserStats> findByUser(AppUser user);
+public interface AppUserRepository extends JpaRepository<AppUser, Long> {
+    Optional<AppUser> findByUsername(String username);
+    boolean existsByUsername(String username);
 }
