@@ -22,20 +22,20 @@ public class TaskService {
         this.userRepository = userRepository;
     }
 
-    private AppUser getAuthenticatedUser(String username) {
-        return userRepository.findByUsername(username)
+    private AppUser getAuthenticatedUser(Long userId) {
+        return userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
 
     @Transactional(readOnly = true)
-    public List<HabitTask> getAllTasks(String username) {
-        AppUser user = getAuthenticatedUser(username);
+    public List<HabitTask> getAllTasks(Long userId) {
+        AppUser user = getAuthenticatedUser(userId);
         return taskRepository.findAllByUser(user);
     }
 
     @Transactional
-    public HabitTask createTask(String username, HabitTask task) {
-        AppUser user = getAuthenticatedUser(username);
+    public HabitTask createTask(Long userId, HabitTask task) {
+        AppUser user = getAuthenticatedUser(userId);
         if (taskRepository.existsByNameAndUser(task.getName(), user)) {
             throw new IllegalArgumentException("Task already exists");
         }
@@ -44,8 +44,8 @@ public class TaskService {
     }
 
     @Transactional
-    public boolean updateHistory(String username, Long taskId, HistoryUpdateRequest request) {
-        AppUser user = getAuthenticatedUser(username);
+    public boolean updateHistory(Long userId, Long taskId, HistoryUpdateRequest request) {
+        AppUser user = getAuthenticatedUser(userId);
         Optional<HabitTask> optionalTask = taskRepository.findByIdAndUser(taskId, user);
 
         if (optionalTask.isEmpty()) {
@@ -65,8 +65,8 @@ public class TaskService {
     }
 
     @Transactional
-    public boolean deleteTask(String username, Long taskId) {
-        AppUser user = getAuthenticatedUser(username);
+    public boolean deleteTask(Long userId, Long taskId) {
+        AppUser user = getAuthenticatedUser(userId);
         Optional<HabitTask> optionalTask = taskRepository.findByIdAndUser(taskId, user);
 
         if (optionalTask.isPresent()) {

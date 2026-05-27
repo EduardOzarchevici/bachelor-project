@@ -20,14 +20,14 @@ public class SettingsService {
         this.userRepository = userRepository;
     }
 
-    private AppUser getAuthenticatedUser(String username) {
-        return userRepository.findByUsername(username)
+    private AppUser getAuthenticatedUser(Long userId) {
+        return userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
 
     @Transactional
-    public UserStats getOrCreateStats(String username) {
-        AppUser user = getAuthenticatedUser(username);
+    public UserStats getOrCreateStats(Long userId) {
+        AppUser user = getAuthenticatedUser(userId);
         return statsRepository.findByUser(user).orElseGet(() -> {
             UserStats newStats = new UserStats();
             newStats.setUser(user);
@@ -36,15 +36,15 @@ public class SettingsService {
     }
 
     @Transactional(readOnly = true)
-    public PushupsSettingsResponse getPushupsTarget(String username) {
-        AppUser user = getAuthenticatedUser(username);
-        UserStats stats = statsRepository.findByUser(user).orElseGet(() -> getOrCreateStats(username));
+    public PushupsSettingsResponse getPushupsTarget(Long userId) {
+        AppUser user = getAuthenticatedUser(userId);
+        UserStats stats = statsRepository.findByUser(user).orElseGet(() -> getOrCreateStats(userId));
         return new PushupsSettingsResponse(stats.getPushupsTarget());
     }
 
     @Transactional
-    public PushupsSettingsResponse updatePushupsTarget(String username, PushupsSettingsRequest request) {
-        UserStats stats = getOrCreateStats(username);
+    public PushupsSettingsResponse updatePushupsTarget(Long userId, PushupsSettingsRequest request) {
+        UserStats stats = getOrCreateStats(userId);
         int target = request.getPushupsTarget();
 
         if (target < 1) {

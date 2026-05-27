@@ -2,9 +2,10 @@ package org.fitblocker.controller;
 
 import org.fitblocker.dto.PushupsSettingsRequest;
 import org.fitblocker.dto.PushupsSettingsResponse;
+import org.fitblocker.security.UserPrincipal;
 import org.fitblocker.service.SettingsService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,14 +19,14 @@ public class SettingsController {
     }
 
     @GetMapping("/pushups")
-    public ResponseEntity<PushupsSettingsResponse> getPushupsTarget(Authentication authentication) {
-        return ResponseEntity.ok(settingsService.getPushupsTarget(authentication.getName()));
+    public ResponseEntity<PushupsSettingsResponse> getPushupsTarget(@AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(settingsService.getPushupsTarget(principal.getId()));
     }
 
     @PutMapping("/pushups")
     public ResponseEntity<PushupsSettingsResponse> updatePushupsTarget(
             @RequestBody PushupsSettingsRequest request,
-            Authentication authentication) {
-        return ResponseEntity.ok(settingsService.updatePushupsTarget(authentication.getName(), request));
+            @AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(settingsService.updatePushupsTarget(principal.getId(), request));
     }
 }

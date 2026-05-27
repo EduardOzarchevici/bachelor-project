@@ -24,14 +24,14 @@ public class StatsService {
         this.userRepository = userRepository;
     }
 
-    private AppUser getAuthenticatedUser(String username) {
-        return userRepository.findByUsername(username)
+    private AppUser getAuthenticatedUser(Long userId) {
+        return userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
 
     @Transactional
-    public UserStats getOrCreateStats(String username) {
-        AppUser user = getAuthenticatedUser(username);
+    public UserStats getOrCreateStats(Long userId) {
+        AppUser user = getAuthenticatedUser(userId);
         return statsRepository.findByUser(user).orElseGet(() -> {
             UserStats newStats = new UserStats();
             newStats.setUser(user);
@@ -40,9 +40,9 @@ public class StatsService {
     }
 
     @Transactional
-    public UserStats getUserStats(String username) {
-        AppUser user = getAuthenticatedUser(username);
-        UserStats stats = getOrCreateStats(username);
+    public UserStats getUserStats(Long userId) {
+        AppUser user = getAuthenticatedUser(userId);
+        UserStats stats = getOrCreateStats(userId);
 
         List<HabitTask> tasks = taskRepository.findAllByUser(user);
         int completedDays = tasks.stream()

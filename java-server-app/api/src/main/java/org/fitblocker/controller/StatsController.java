@@ -1,9 +1,10 @@
 package org.fitblocker.controller;
 
 import org.fitblocker.model.UserStats;
+import org.fitblocker.security.UserPrincipal;
 import org.fitblocker.service.StatsService;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -19,7 +20,7 @@ public class StatsController {
     }
 
     @GetMapping
-    public ResponseEntity<UserStats> getStats(Authentication authentication) {
-        return ResponseEntity.ok(statsService.getUserStats(authentication.getName()));
+    public ResponseEntity<UserStats> getStats(@AuthenticationPrincipal UserPrincipal principal) {
+        return ResponseEntity.ok(statsService.getUserStats(principal.getId()));
     }
 }

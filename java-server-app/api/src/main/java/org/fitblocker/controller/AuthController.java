@@ -1,11 +1,11 @@
 package org.fitblocker.controller;
 
-
 import org.fitblocker.dto.AuthRequest;
 import org.fitblocker.dto.AuthResponse;
 import org.fitblocker.model.AppUser;
 import org.fitblocker.repository.AppUserRepository;
 import org.fitblocker.security.JwtUtil;
+import org.fitblocker.security.UserPrincipal;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -37,6 +37,7 @@ public class AuthController {
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         userRepository.save(user);
+
         return ResponseEntity.ok("User registered successfully");
     }
 
@@ -45,7 +46,13 @@ public class AuthController {
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword())
         );
-        String token = jwtUtil.generateToken(request.getUsername());
+
+        AppUser appUser = userRepository.findByUsername(request.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        UserPrincipal userPrincipal = new UserPrincipal(appUser);
+        String token = jwtUtil.generateToken(userPrincipal);
+
         return ResponseEntity.ok(new AuthResponse(token));
     }
 }
