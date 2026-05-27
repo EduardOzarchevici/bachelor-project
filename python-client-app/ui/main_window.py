@@ -37,6 +37,11 @@ class MainWindow(ctk.CTk):
         self.api = ApiClient()
         self.pushup_target = 5
 
+        self.lock_interval = 1800
+        self.time_remaining = self.lock_interval
+        self.timer_label = None
+        self.timer_running = False
+
     def initialize_app_ui(self):
         self.auth_view.destroy()
         self.grid_columnconfigure(1, weight=1)
@@ -49,7 +54,7 @@ class MainWindow(ctk.CTk):
             border_width=0,
         )
         self.sidebar_frame.grid(row=0, column=0, sticky="nsew")
-        self.sidebar_frame.grid_rowconfigure(6, weight=1)
+        self.sidebar_frame.grid_rowconfigure(7, weight=1)
         self.sidebar_frame.grid_propagate(False)
 
         brand_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
@@ -87,6 +92,24 @@ class MainWindow(ctk.CTk):
 
         self.nav_buttons["settings"] = self._create_nav_button("Settings", self.show_settings)
         self.nav_buttons["settings"].grid(row=5, column=0, padx=16, pady=4, sticky="ew")
+
+        timer_frame = ctk.CTkFrame(self.sidebar_frame, fg_color=COLORS["accent_soft"], corner_radius=8)
+        timer_frame.grid(row=6, column=0, padx=16, pady=(16, 0), sticky="ew")
+
+        ctk.CTkLabel(
+            timer_frame,
+            text="Next Lock In:",
+            font=ctk.CTkFont(family=FONTS["small"][0], size=11, weight="bold"),
+            text_color=COLORS["accent"]
+        ).pack(pady=(8, 0))
+
+        self.timer_label = ctk.CTkLabel(
+            timer_frame,
+            text="30:00",
+            font=ctk.CTkFont(family=FONTS["title"][0], size=24, weight="bold"),
+            text_color=COLORS["text"]
+        )
+        self.timer_label.pack(pady=(0, 8))
 
         footer = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
         footer.grid(row=8, column=0, padx=16, pady=(0, 24), sticky="ew")
@@ -127,6 +150,26 @@ class MainWindow(ctk.CTk):
         self.show_dashboard()
         self._load_pushups_target()
 
+        self.timer_running = True
+        self._tick_timer()
+
+    def _tick_timer(self):
+        if not self.timer_running:
+            return
+
+        if self.lock_screen_window is not None and self.lock_screen_window.winfo_exists():
+            self.after(1000, self._tick_timer)
+            return
+
+        if self.time_remaining > 0:
+            self.time_remaining -= 1
+            minutes, seconds = divmod(self.time_remaining, 60)
+            self.timer_label.configure(text=f"{minutes:02d}:{seconds:02d}")
+            self.after(1000, self._tick_timer)
+        else:
+            self.trigger_penalty()
+            self.after(1000, self._tick_timer)
+
     def _load_pushups_target(self):
         def run():
             try:
@@ -137,7 +180,6 @@ class MainWindow(ctk.CTk):
                         target = 1
                     self.after(0, self._on_pushups_saved, target)
             except Exception:
-                # Keep default if offline.
                 return
 
         threading.Thread(target=run, daemon=True).start()
@@ -218,7 +260,9 @@ class MainWindow(ctk.CTk):
             )
 
     def on_penalty_cleared(self):
-        pass
+        self.time_remaining = self.lock_interval
+        minutes, seconds = divmod(self.time_remaining, 60)
+        self.timer_label.configure(text=f"{minutes:02d}:{seconds:02d}")
 
     def handle_kill_switch_event(self):
         self.after(0, self.force_close_lock_screen)
@@ -227,3 +271,4 @@ class MainWindow(ctk.CTk):
         if self.lock_screen_window and self.lock_screen_window.winfo_exists():
             self.lock_screen_window.release_resources()
             self.lock_screen_window.destroy()
+            self.on_penalty_cleared()

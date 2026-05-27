@@ -61,7 +61,7 @@ class DashboardView(ctk.CTkFrame):
 
         self.create_stat_card(stats_row, 0, "XP", self.xp_var, self.xp_sub_var, COLORS["accent"])
         self.create_stat_card(stats_row, 1, "Active Habits", self.tasks_var, self.tasks_sub_var, COLORS["today"])
-        self.create_stat_card(stats_row, 2, "Pushups Done", self.pushups_var, self.pushups_sub_var, COLORS["warning"])
+        # self.create_stat_card(stats_row, 2, "Pushups Done", self.pushups_var, self.pushups_sub_var, COLORS["warning"])
 
         actions_card = ctk.CTkFrame(
             self,
