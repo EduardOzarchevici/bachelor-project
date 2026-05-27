@@ -1,3 +1,4 @@
+import threading
 import customtkinter as ctk
 import keyboard
 from ui.lock_screen import LockScreen
@@ -5,6 +6,8 @@ from ui.dashboard_view import DashboardView
 from ui.pomodoro_view import PomodoroView
 from ui.todo_tracker_view import TodoTrackerView
 from ui.auth_view import AuthView
+from ui.settings_view import SettingsView
+from core.api_client import ApiClient
 from ui.theme import APP_TITLE, WINDOW_SIZE, MIN_WINDOW_SIZE, COLORS, FONTS, SPACING
 
 
@@ -27,9 +30,12 @@ class MainWindow(ctk.CTk):
         self.dashboard_view = None
         self.pomodoro_view = None
         self.todo_tracker_view = None
+        self.settings_view = None
         self.lock_screen_window = None
         self.nav_buttons = {}
         self.active_nav = None
+        self.api = ApiClient()
+        self.pushup_target = 5
 
     def initialize_app_ui(self):
         self.auth_view.destroy()
@@ -79,8 +85,11 @@ class MainWindow(ctk.CTk):
         self.nav_buttons["pomodoro"] = self._create_nav_button("Pomodoro", self.show_pomodoro)
         self.nav_buttons["pomodoro"].grid(row=4, column=0, padx=16, pady=4, sticky="ew")
 
+        self.nav_buttons["settings"] = self._create_nav_button("Settings", self.show_settings)
+        self.nav_buttons["settings"].grid(row=5, column=0, padx=16, pady=4, sticky="ew")
+
         footer = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
-        footer.grid(row=7, column=0, padx=16, pady=(0, 24), sticky="ew")
+        footer.grid(row=8, column=0, padx=16, pady=(0, 24), sticky="ew")
 
         ctk.CTkButton(
             footer,
@@ -111,10 +120,32 @@ class MainWindow(ctk.CTk):
         )
         self.pomodoro_view = PomodoroView(self.main_content_frame, penalty_callback=self.trigger_penalty)
         self.todo_tracker_view = TodoTrackerView(self.main_content_frame)
+        self.settings_view = SettingsView(self.main_content_frame, on_pushups_saved=self._on_pushups_saved)
 
         keyboard.add_hotkey("alt+0+l", self.handle_kill_switch_event)
         self._set_active_nav("dashboard")
         self.show_dashboard()
+        self._load_pushups_target()
+
+    def _load_pushups_target(self):
+        def run():
+            try:
+                resp = self.api.get("/settings/pushups", timeout=5)
+                if resp.status_code == 200:
+                    target = int(resp.json().get("pushupsTarget", 5))
+                    if target < 1:
+                        target = 1
+                    self.after(0, self._on_pushups_saved, target)
+            except Exception:
+                # Keep default if offline.
+                return
+
+        threading.Thread(target=run, daemon=True).start()
+
+    def _on_pushups_saved(self, target: int):
+        self.pushup_target = int(target)
+        if self.settings_view is not None:
+            self.settings_view.set_pushups_target(self.pushup_target)
 
     def _create_nav_button(self, text, command):
         return ctk.CTkButton(
@@ -146,7 +177,7 @@ class MainWindow(ctk.CTk):
                 )
 
     def _hide_all_views(self):
-        for view in (self.dashboard_view, self.pomodoro_view, self.todo_tracker_view):
+        for view in (self.dashboard_view, self.pomodoro_view, self.todo_tracker_view, self.settings_view):
             if view is not None:
                 view.grid_forget()
 
@@ -171,11 +202,18 @@ class MainWindow(ctk.CTk):
         self._hide_all_views()
         self.todo_tracker_view.grid(row=0, column=0, sticky="nsew")
 
+    def show_settings(self):
+        if self.settings_view is None:
+            return
+        self._set_active_nav("settings")
+        self._hide_all_views()
+        self.settings_view.grid(row=0, column=0, sticky="nsew")
+
     def trigger_penalty(self):
         if self.lock_screen_window is None or not self.lock_screen_window.winfo_exists():
             self.lock_screen_window = LockScreen(
                 self,
-                target_pushups=5,
+                target_pushups=self.pushup_target,
                 on_unlock_callback=self.on_penalty_cleared,
             )
 

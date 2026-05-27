@@ -52,14 +52,14 @@ class DashboardView(ctk.CTkFrame):
         stats_row.grid(row=1, column=0, padx=SPACING["page_padx"], pady=(8, 16), sticky="ew")
         stats_row.grid_columnconfigure((0, 1, 2), weight=1)
 
-        self.level_xp_var = ctk.StringVar(value="—")
+        self.xp_var = ctk.StringVar(value="—")
         self.tasks_var = ctk.StringVar(value="—")
         self.pushups_var = ctk.StringVar(value="0")
-        self.level_sub_var = ctk.StringVar(value="Loading...")
+        self.xp_sub_var = ctk.StringVar(value="Loading...")
         self.tasks_sub_var = ctk.StringVar(value="Loading...")
         self.pushups_sub_var = ctk.StringVar(value="Penalty workouts")
 
-        self.create_stat_card(stats_row, 0, "Level & XP", self.level_xp_var, self.level_sub_var, COLORS["accent"])
+        self.create_stat_card(stats_row, 0, "XP", self.xp_var, self.xp_sub_var, COLORS["accent"])
         self.create_stat_card(stats_row, 1, "Active Habits", self.tasks_var, self.tasks_sub_var, COLORS["today"])
         self.create_stat_card(stats_row, 2, "Pushups Done", self.pushups_var, self.pushups_sub_var, COLORS["warning"])
 
@@ -155,9 +155,9 @@ class DashboardView(ctk.CTkFrame):
         ).grid(row=3, column=0, padx=20, pady=(0, 20), sticky="w")
 
     def fetch_dashboard_data(self):
-        self.level_xp_var.set("—")
+        self.xp_var.set("—")
         self.tasks_var.set("—")
-        self.level_sub_var.set("Loading...")
+        self.xp_sub_var.set("Loading...")
         self.tasks_sub_var.set("Loading...")
         threading.Thread(target=self._async_fetch_data, daemon=True).start()
 
@@ -169,23 +169,22 @@ class DashboardView(ctk.CTkFrame):
             if stats_response.status_code == 200 and tasks_response.status_code == 200:
                 stats_data = stats_response.json()
                 tasks_data = tasks_response.json()
-                level = stats_data.get("level", 1)
                 xp = stats_data.get("xp", 0)
                 task_count = len(tasks_data)
-                self.after(0, self._update_ui, level, xp, task_count)
+                self.after(0, self._update_ui, xp, task_count)
             else:
                 self.after(0, self._update_ui_error)
         except requests.RequestException:
             self.after(0, self._update_ui_error)
 
-    def _update_ui(self, level, xp, task_count):
-        self.level_xp_var.set(f"Level {level}")
+    def _update_ui(self, xp, task_count):
+        self.xp_var.set(str(xp))
         self.tasks_var.set(str(task_count))
-        self.level_sub_var.set(f"{xp} XP earned")
+        self.xp_sub_var.set("Total completed tasks")
         self.tasks_sub_var.set("Tracked in spreadsheet")
 
     def _update_ui_error(self):
-        self.level_xp_var.set("Offline")
+        self.xp_var.set("Offline")
         self.tasks_var.set("—")
-        self.level_sub_var.set("Could not reach server")
+        self.xp_sub_var.set("Could not reach server")
         self.tasks_sub_var.set("Check API connection")

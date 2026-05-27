@@ -36,11 +36,25 @@ public class ApiController {
     @GetMapping("/stats")
     public UserStats getStats(Authentication authentication) {
         AppUser user = getAuthenticatedUser(authentication);
-        return statsRepository.findByUser(user).orElseGet(() -> {
+        UserStats stats = statsRepository.findByUser(user).orElseGet(() -> {
             UserStats newStats = new UserStats();
             newStats.setUser(user);
             return statsRepository.save(newStats);
         });
+
+        // XP is always computed as "sum of all completed task days"
+        List<HabitTask> tasks = taskRepository.findAllByUser(user);
+        int completedDays = tasks.stream()
+                .map(t -> t.getCompletedDates() == null ? 0 : t.getCompletedDates().size())
+                .reduce(0, Integer::sum);
+        stats.setXp(completedDays);
+
+        // Backward-compatible default if an older row exists with an unset value.
+        if (stats.getPushupsTarget() <= 0) {
+            stats.setPushupsTarget(5);
+        }
+
+        return statsRepository.save(stats);
     }
 
     @GetMapping("/tasks")
@@ -69,24 +83,14 @@ public class ApiController {
         }
 
         HabitTask task = optionalTask.get();
-        UserStats stats = statsRepository.findByUser(user).orElseGet(() -> {
-            UserStats newStats = new UserStats();
-            newStats.setUser(user);
-            return statsRepository.save(newStats);
-        });
 
         if (request.isCompleted() && !task.getCompletedDates().contains(request.getDate())) {
             task.getCompletedDates().add(request.getDate());
-            stats.setXp(stats.getXp() + 1);
         } else if (!request.isCompleted() && task.getCompletedDates().contains(request.getDate())) {
             task.getCompletedDates().remove(request.getDate());
-            stats.setXp(Math.max(0, stats.getXp() - 1));
         }
 
-        stats.setLevel((stats.getXp() / 10) + 1);
-
         taskRepository.save(task);
-        statsRepository.save(stats);
 
         return ResponseEntity.ok().build();
     }
